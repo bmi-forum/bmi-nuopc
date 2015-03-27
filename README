@@ -1,0 +1,33 @@
+The NUOPC-BMI Adapter is part of the Earth Systems Bridge Project.  This project wraps the Basic Modeling Interface (BMI) in a NUOPC Model Component for compatibility within the Earth Systems Modeling Framework.
+
+Runtime linking
+See ESMF reference document section 16.4.3 User-code SetServices method for GridComp runtime linking.
+
+=========================
+Dependencies:
+  - ESMF v7.0.0 beta
+  
+Build:
+  - Set environment variable ESMFMKFILE to point to the esmf.mk of your ESMF
+    installation.
+  - gmake
+  
+Execution:
+  - Optionally set environment variable ESMF_RUNTIME_COMPLIANCECHECK to ON.
+  - mpirun -np X ./esmApp (where X is the total number of PETs)
+  
+Output:
+  - PET*.Log files containing compliance checker output if turned on.
+  - The prototype outputs time stepping information to stdout.
+
+Code structure:
+  - Makefile    - Makefile that is based on the standard esmf.mk mechanism.
+  - modeladapter_bmi.F90
+  - driver.F90  - Driver specializing NUOPC_Driver, driving the single MODEL.
+  - mainApp.F90 - Main application cap.
+
+Tested Environment:
+  - Linux.gfortran.64.mpich2.default
+
+========================= 
+https://earthsystemcog.org/projects/earthsystembridge/bmiesmfplans
