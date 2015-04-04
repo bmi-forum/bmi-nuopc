@@ -166,7 +166,7 @@ module esmfBmiAdapter
     procedure(bmiGetComponentName), pointer :: pBmiGetComponentName => null()
 
 
-        integer, parameter :: BMI_VAR_TYPE_UNKNOWN = 0
+    integer, parameter :: BMI_VAR_TYPE_UNKNOWN = 0
     integer, parameter :: BMI_VAR_TYPE_CHAR = 1
     integer, parameter :: BMI_VAR_TYPE_UNSIGNED_CHAR = 2
     integer, parameter :: BMI_VAR_TYPE_INT = 3
@@ -186,7 +186,7 @@ module esmfBmiAdapter
     integer, parameter :: BMI_GRID_TYPE_NUMBER = 5
 
     integer, parameter :: BMI_MAXVARNAMESTR = 22
-    integer, parameter :: BMI_MAXCOMPNAMESTR = 22
+    integer, parameter :: BMI_MAXCOMPNAMESTR = 19
     integer, parameter :: BMI_MAXUNITSSTR = 22
 
     integer,parameter :: BMI_CHAR = 1
@@ -214,29 +214,31 @@ contains
         getVarRank, getGridType, getGridShape, getGridSpacing, getGridOrigin, &
         getGridCoord,getDouble, getDoubleAt, setDouble, setDoubleAt, &
         getInputVarNames, getOutputVarNames, getComponentName, rc)
+
         procedure(bmiInitialize) :: initialize
         procedure(bmiUpdate) :: update
         procedure(bmiFinalize) :: finalize
-        procedure(bmiGetStartTime) :: getStartTime
-        procedure(bmiGetEndTime) :: getEndTime
-        procedure(bmiGetCurrentTime) :: getCurrentTime
         procedure(bmiGetTimeStep) :: getTimeStep
         procedure(bmiGetTimeUnits) :: getTimeUnits
-        procedure(bmiGetVarType) :: getVarType
         procedure(bmiGetVarUnits) :: getVarUnits
-        procedure(bmiGetVarRank) :: getVarRank
-        procedure(bmiGetGridType) :: getGridType
         procedure(bmiGetGridShape) :: getGridShape
         procedure(bmiGetGridSpacing) :: getGridSpacing
-        procedure(bmiGetGridOrigin) :: getGridOrigin
-        procedure(bmiGetGridCoord),optional  :: getGridCoord
         procedure(bmiGetDouble) :: getDouble
-        procedure(bmiGetDoubleAt) :: getDoubleAt
-        procedure(bmiSetDouble) :: setDouble
-        procedure(bmiSetDoubleAt) :: setDoubleAt
-        procedure(bmiGetInputVarNames) :: getInputVarNames
-        procedure(bmiGetOutputVarNames) :: getOutputVarNames
         procedure(bmiGetComponentName) :: getComponentName
+        procedure(bmiGetStartTime),optional :: getStartTime
+        procedure(bmiGetEndTime),optional :: getEndTime
+        procedure(bmiGetCurrentTime),optional :: getCurrentTime
+        procedure(bmiGetVarType),optional :: getVarType
+        procedure(bmiGetVarRank),optional :: getVarRank
+        procedure(bmiGetGridType),optional :: getGridType
+        procedure(bmiGetGridOrigin),optional :: getGridOrigin
+        procedure(bmiGetGridCoord),optional  :: getGridCoord
+        procedure(bmiGetDoubleAt),optional :: getDoubleAt
+        procedure(bmiSetDouble),optional :: setDouble
+        procedure(bmiSetDoubleAt),optional :: setDoubleAt
+        procedure(bmiGetInputVarNames),optional :: getInputVarNames
+        procedure(bmiGetOutputVarNames),optional :: getOutputVarNames
+
         integer, intent(out) :: rc
 
         rc = ESMF_SUCCESS
@@ -245,25 +247,78 @@ contains
         pBmiUpdate => update
         pBmiFinalize => finalize
         pBmiGetTimeStep => getTimeStep
-        pBmiGetStartTime => getStartTime
-        pBmiGetEndTime => getEndTime
-        pBmiGetCurrentTime => getCurrentTime
         pBmiGetTimeUnits => getTimeUnits
-        pBmiGetVarType => getVarType
         pBmiGetVarUnits => getVarUnits
-        pBmiGetVarRank => getVarRank
-        pBmiGetGridType => getGridType
         pBmiGetGridShape => getGridShape
         pBmiGetGridSpacing => getGridSpacing
-        pBmiGetGridOrigin => getGridOrigin
-        if(present(getGridCoord)) pbmiGetGridCoord => getGridCoord
         pBmiGetDouble => getDouble
-        pBmiGetDoubleAt => getDoubleAt
-        pBmiSetDouble => setDouble
-        pBmiSetDoubleAt => setDoubleAt
-        pBmiGetInputVarNames => getInputVarNames
-        pBmiGetOutputVarNames => getOutputVarNames
         pBmiGetComponentName => getComponentName
+
+        if(present(getStartTime)) then
+            pBmiGetStartTime => getStartTime
+        else
+            pBmiGetStartTime => defaultGetStartTime
+        end if
+        if(present(getEndTime)) then
+            pBmiGetEndTime => getEndTime
+        else
+            pBmiGetEndTime => defaultGetEndTime
+        end if
+        if(present(getCurrentTime)) then
+            pBmiGetCurrentTime => getCurrentTime
+        else
+            pBmiGetCurrentTime => defaultGetCurrentTime
+        end if
+        if (present(getVarType)) then
+            pBmiGetVarType => getVarType
+        else
+            pBmiGetVarType => defaultGetVarType
+        end if
+        if(present(getVarRank)) then
+            pBmiGetVarRank => getVarRank
+        else
+            pBmiGetVarRank => defaultGetVarRank
+        end if
+        if(present(getGridType)) then
+            pBmiGetGridType => getGridType
+        else
+            pBmiGetGridType => defaultGetGridType
+        end if
+        if(present(getGridOrigin)) then
+            pBmiGetGridOrigin => getGridOrigin
+        else
+            pBmiGetGridOrigin => defaultGetGridOrigin
+        end if
+        if(present(getGridCoord)) then
+            pBmiGetGridCoord => getGridCoord
+        else
+            pBmiGetGridCoord => defaultGetGridCoord
+        end if
+        if(present(getDoubleAt)) then
+            pBmiGetDoubleAt => getDoubleAt
+        else
+            pBmiGetDoubleAt => defaultGetDoubleAt
+        end if
+        if(present(setDouble)) then
+            pBmiSetDouble => setDouble
+        else
+            pBmiSetDouble => defaultSetDouble
+        end if
+        if(present(setDoubleAt)) then
+            pBmiSetDoubleAt => setDoubleAt
+        else
+            pBmiSetDoubleAt => defaultSetDoubleAt
+        end if
+        if(present(getInputVarNames)) then
+            pBmiGetInputVarNames => getInputVarNames
+        else
+            pBmiGetInputVarNames => defaultGetInputVarNames
+        end if
+        if(present(getOutputVarNames)) then
+            pBmiGetOutputVarNames => getOutputVarNames
+        else
+            pBmiGetOutputVarNames => defaultGetOutputVarNames
+        end if
 
         if(associated(pBmiInitialize) .and. &
             associated(pBmiUpdate) .and. &
@@ -280,6 +335,7 @@ contains
             associated(pBmiGetGridShape) .and. &
             associated(pBmiGetGridSpacing) .and. &
             associated(pBmiGetGridOrigin) .and. &
+            associated(pBmiGetGridCoord) .and. &
             associated(pBmiGetDouble) .and. &
             associated(pBmiGetDoubleAt) .and. &
             associated(pBmiSetDouble) .and. &
@@ -323,7 +379,7 @@ contains
 
         if (state%set) then
 
-            call pBmiInitialize(file)
+            ! BMI has already been initialized before driver for MPI
 
             ! To be discussed: Initialization requirements
             call pBmiGetComponentName(compname)
@@ -1116,5 +1172,108 @@ contains
             line=line,file=file,method=method,log=log,rc=rc)
 
     end subroutine BMIAdapter_LogWrite
+
+        !########################################
+    !# Dummy routines for when not provided #
+    !########################################
+
+    subroutine defaultGetStartTime (start)
+        implicit none
+        real,intent(out) :: start
+        start = 0.
+    end subroutine
+
+    subroutine defaultGetEndTime (end)
+        implicit none
+        real, intent (out) :: end
+        end = 100.
+    end subroutine
+
+    subroutine defaultGetCurrentTime (time)
+        implicit none
+        real, intent (out) :: time
+        time = 1.
+    end subroutine
+
+    subroutine defaultGetVarType (var_name, type)
+        implicit none
+        character (len=*), intent (in) :: var_name
+        integer, intent (out) :: type
+        type = 8
+    end subroutine
+
+    subroutine defaultGetVarRank (var_name, rank)
+        implicit none
+        character (len=*), intent (in) :: var_name
+        integer, intent (out) :: rank
+        rank = 2
+    end subroutine
+
+    subroutine defaultGetGridType (var_name, type)
+        implicit none
+        character (len=*), intent (in) :: var_name
+        integer, intent (out) :: type
+        type = 1
+    end subroutine
+
+    subroutine defaultGetGridOrigin (var_name, origin)
+        implicit none
+        character (len=*), intent (in) :: var_name
+        real, dimension (:), intent (out) :: origin
+        origin(1) = 0.
+        origin(2) = 0.
+    end subroutine
+
+    subroutine defaultGetGridCoord(var_name,dimension,gridX)
+        character (len=*), intent (in) :: var_name
+        integer, intent(in) :: dimension
+        real, dimension (:), intent (out) :: gridX
+        gridX(1)=1.
+        gridX(2)=2.
+        gridX(3)=3.
+    end subroutine
+
+    subroutine defaultGetDoubleAt (var_name, dest, inds)
+        implicit none
+        character (len=*), intent (in) :: var_name
+        real, pointer, intent (inout) :: dest(:)
+        integer, intent (in) :: inds(:)
+    end subroutine
+
+    subroutine defaultSetdouble (var_name, src)
+        implicit none
+        character (len=*), intent (in) :: var_name
+        real, intent (in) :: src (*)
+    end subroutine
+
+    subroutine defaultSetDoubleAt (var_name, inds, src)
+        implicit none
+        character (len=*), intent (in) :: var_name
+        integer, intent (in) :: inds(:)
+        real, intent (in) :: src (*)
+    end subroutine
+
+    subroutine defaultGetInputVarNames (names)
+        implicit none
+        character (*),pointer, intent (out) :: names(:)
+
+        character (len=BMI_MAXVARNAMESTR), target, &
+            dimension (1) :: &
+            input_items = (/'dummy input variable'/)
+
+        names => input_items
+
+    end subroutine
+
+    subroutine defaultGetOutputVarNames (names)
+        implicit none
+        character (*),pointer, intent (out) :: names(:)
+        character (len=BMI_MAXVARNAMESTR), target, &
+            dimension (1) :: &
+            output_items = (/'dummy output variable'/)
+          ! end exchange item list
+
+        names => output_items
+    end subroutine
 
 end module esmfBmiAdapter

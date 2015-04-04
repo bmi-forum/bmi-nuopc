@@ -24,27 +24,14 @@ endif
 
 include $(ESMFMKFILE)
 
-BINDIR=./bin
-LIBDIR=./lib
-OBJDIR=./obj
-MODDIR=./mod
 SRCDIR=./src
 
-#LOCAL_F90COMPILEOPTS = -w -ffree-form -fconvert=swap
-#LOCAL_F90LINKOPTS = -w -ffree-form -fconvert=swap
-LOCAL_F90LINKPATHS = -Llib -L$(NETCDF)/lib 
-LOCAL_F90LINKLIBS = -lwrf_bmi -lnetcdff -lnetcdf
-#LOCAL_F90LINKPATHS = -L lib/
-#LOCAL_F90LINKLIBS = -lwrf_bmi
+LOCAL_F90COMPILEOPTS = -w -ffree-form -fconvert=swap
+LOCAL_F90LINKOPTS = -w -ffree-form -fconvert=swap
+LOCAL_F90LINKPATHS = -Llib
+WRFLIBS = -lwrf_bmi
+TESTLIBS = -ltest_bmi
 
-
-#ESMF_F90COMPILEDIRSLOCAL += -I$(OBJDIR) -I$(MODDIR)
-#ESMF_CXXCOMPILEDIRSLOCAL += -I$(OBJDIR) -I$(MODDIR)
-
-FILTER_STRING = -Wl,--no-as-needed
-#AS_NEEDED = -Wl,--as-needed
-
-ESMF_F90LINKOPTSASNEEDED = $(filter-out $(FILTER_STRING),$(ESMF_F90LINKOPTS))
 
 ################################################################################
 ################################################################################
@@ -69,17 +56,13 @@ vpath %.C $(SRCDIR)
 	$(ESMF_CXXCOMPILER) -c $(ESMF_CXXCOMPILEOPTS) $(ESMF_CXXCOMPILEPATHSLOCAL) $(ESMF_CXXCOMPILEPATHS) $(ESMF_CXXCOMPILECPPFLAGS) $<
 
 # -----------------------------------------------------------------------------
-all: libtest_bmi.a testApp.exe
+all: wrfApp.exe # libtest_bmi.a testApp.exe
 # -----------------------------------------------------------------------------
-testApp.exe: testApp.o testNuopcDriver.o testNuopcBmiCmp.o NUOPC_Model_BMI.o esmfBmiAdapter.o libtest_bmi.a
-	$(ESMF_F90LINKER) $(ESMF_F90LINKOPTS) $(ESMF_F90LINKPATHS) $(ESMF_F90LINKRPATHS) -o $@ $^ $(ESMF_F90ESMFLINKLIBS)
+testApp.exe: testApp.o testNuopcDriver.o testNuopcBmiCmp.o NUOPC_Model_BMI.o esmfBmiAdapter.o
+	$(ESMF_F90LINKER) $(ESMF_F90LINKOPTS) $(ESMF_F90LINKPATHS) $(ESMF_F90LINKRPATHS) $(LOCAL_F90LINKOPTS) $(LOCAL_F90LINKPATHS) -o $@ $^ $(ESMF_F90ESMFLINKLIBS) $(TESTLIBS)
 
 wrfApp.exe: wrfApp.o wrfNuopcDriver.o wrfNuopcBmiCmp.o NUOPC_Model_BMI.o esmfBmiAdapter.o
-	$(ESMF_F90LINKER) $(ESMF_F90LINKOPTSASNEEDED) $(ESMF_F90LINKPATHS) $(ESMF_F90LINKRPATHS) $(LOCAL_F90LINKPATHS) -o $@ $^ $(ESMF_F90ESMFLINKLIBS)  $(LOCAL_F90LINKLIBS)
-
-wrfTest.exe:
-	$(ESMF_F90COMPILER) -c $(ESMF_F90COMPILEOPTS) $(LOCAL_F90COMPILEOPTS) $(ESMF_F90COMPILEPATHS) $(ESMF_F90COMPILEFREECPP) $(ESMF_F90COMPILECPPFLAGS) -DESMF_VERSION_MAJOR=$(ESMF_VERSION_MAJOR) src/wrfTest.F90
-	$(ESMF_F90LINKER) $(ESMF_F90LINKOPTSASNEEDED) $(LOCAL_F90LINKOPTS) $(ESMF_F90LINKPATHS) $(ESMF_F90LINKRPATHS) $(LOCAL_F90LINKPATHS) -o wrfTest.exe wrfTest.o $(ESMF_F90ESMFLINKLIBS) $(LOCAL_F90LINKLIBS)
+	$(ESMF_F90LINKER) $(ESMF_F90LINKOPTS) $(ESMF_F90LINKPATHS) $(ESMF_F90LINKRPATHS) $(LOCAL_F90LINKOPTS) $(LOCAL_F90LINKPATHS) -o $@ $^ $(ESMF_F90ESMFLINKLIBS) $(WRFLIBS)
 
 # module dependencies:
 testApp.o: testNuopcDriver.o
@@ -93,8 +76,9 @@ wrfNuopcBmiCmp.o: NUOPC_Model_BMI.o
 NUOPC_Model_BMI.o: esmfBmiAdapter.o
 
 # -----------------------------------------------------------------------------
-libtest_bmi.a : testModelBmiWrapper.o testModel.o testmodelbmiwrapper.mod
-	ar rc libtest_bmi.a $^
+libtest_bmi.a : testModelBmiWrapper.o testModel.o
+	rm -f lib/libtest_bmi.a
+	ar rc lib/libtest_bmi.a $^
 	
 testModelBmiWrapper.o : testModel.o
 
@@ -102,9 +86,9 @@ testModelBmiWrapper.o : testModel.o
 # -----------------------------------------------------------------------------
 .PHONY: dust clean distclean info edit
 dust:
-	rm -f PET*.ESMF_LogFile *.nc
+	rm -f PET*.ESMF_LogFile PET*.VMUserMpiEx.Log *.nc rsl.error.* rsl.out.*
 clean:
-	rm -f *.exe *.a *.so *.o *.mod rsl.error.* rsl.out.*
+	rm -f *.exe *.a *.so *.o *.mod
 distclean: dust clean
 
 info:
@@ -114,8 +98,4 @@ info:
 	@cat $(ESMFMKFILE)
 	@echo ==================================================================
 
-test:
-	@$(TSTDIR)/testBMIadapter.sh
 
-edit:
-	nedit mainApp.F90 driver.F90 modeladapter_bmi.F90 &

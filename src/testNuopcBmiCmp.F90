@@ -9,26 +9,50 @@ module TestNuopcBmiCmp
     use NUOPC_Model_BMI, only: &
         bmi_model_routine_SM        => SetModel, &
         bmi_model_routine_SS        => SetServices
-    use TestModelBmiWrapper ! This is the external model plugged into the component
   
     implicit none
   
     private
   
     public SetServices
-  
+
+
+
 !-----------------------------------------------------------------------------
 contains
     !-----------------------------------------------------------------------------
-  
+
     subroutine SetServices(model, rc)
         type(ESMF_GridComp)  :: model
         integer, intent(out) :: rc
+
+    external BMI_Initialize, &
+             BMI_Finalize, &
+             BMI_Update, &
+             BMI_Get_start_time, &
+             BMI_Get_end_time, &
+             BMI_Get_current_time, &
+             BMI_Get_time_step, &
+             BMI_Get_time_units, &
+             BMI_Get_var_type, &
+             BMI_Get_var_units, &
+             BMI_Get_var_rank, &
+             BMI_Get_grid_type, &
+             BMI_Get_grid_shape, &
+             BMI_Get_grid_spacing, &
+             BMI_Get_grid_origin, &
+             BMI_Get_double, &
+             BMI_Get_double_at_indices, &
+             BMI_Set_double, &
+             BMI_Set_double_at_indices, &
+             BMI_Get_input_var_names, &
+             BMI_Get_output_var_names, &
+             BMI_Get_component_name
     
         rc = ESMF_SUCCESS
 
         ! Set model - Pass NUOPC Model BMI config file and model procedures
-        call bmi_model_routine_SM(configFile = "bmi.config", &
+        call bmi_model_routine_SM(configFile = "test.cfg", &
             initialize = BMI_Initialize, &
             finalize = BMI_Finalize, &
             update = BMI_Update, &
@@ -52,6 +76,7 @@ contains
             getOutputVarNames = BMI_Get_output_var_names, &
             getComponentName = BMI_Get_component_name, &
             rc = rc)
+
         if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
             line=__LINE__, &
             file=__FILE__)) &

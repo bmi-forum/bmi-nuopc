@@ -33,8 +33,7 @@ module BmiDefinitions
 
 end module BmiDefinitions
 
-module TestModelBmiWrapper
-contains
+
 subroutine BMI_Initialize (config_file)
     use TestModel_class, only: modelInitialize => initialize
     implicit none
@@ -292,12 +291,13 @@ subroutine BMI_Get_component_name (name)
     implicit none
     character (len=*),pointer, intent (out) :: name
 
-    ! Local Variable
-    character (modelCompNameLen), pointer :: compname
+!    ! Local Variable
+!    character (modelCompNameLen), pointer :: compname
 
-    call modelGetComponentName(compname)
+    call modelGetComponentName(name)
 
-    name => compname
+!    name => compname
 
 end subroutine BMI_Get_component_name
-end module TestModelBmiWrapper
+
+
