@@ -22,7 +22,7 @@ module TestModel_class
 
     type(TestModel) :: self ! The compliant model configured by the configuration file or default model values
 
-    integer, parameter :: component_name_length = 22
+    integer, parameter :: component_name_length = 19
     character (component_name_length), target :: &
         component_name = "Fortran test model"
 
@@ -372,6 +372,5 @@ contains
         ! end declaration section
         name => component_name
     end subroutine
-
 
 end module

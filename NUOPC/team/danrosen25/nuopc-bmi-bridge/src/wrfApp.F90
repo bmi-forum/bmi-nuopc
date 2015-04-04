@@ -10,32 +10,34 @@ program WrfApp
     driver_SS => SetServices
 
   implicit none
-  
+
   integer                       :: rc, userRc
   type(ESMF_GridComp)           :: drvComp
 
+  CALL bmi_wrf_initialize ("noConfig")
+
   ! Initialize ESMF
-  call ESMF_Initialize(defaultCalkind=ESMF_CALKIND_GREGORIAN, rc=rc)
+  call ESMF_Initialize(defaultlogfilename="VMUserMpiEx.Log", &
+                    logkindflag=ESMF_LOGKIND_MULTI, defaultCalkind=ESMF_CALKIND_GREGORIAN, rc=rc)
   if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
     line=__LINE__, &
     file=__FILE__)) &
     call ESMF_Finalize(endflag=ESMF_END_ABORT)
-    
   call ESMF_LogWrite("wrfApp STARTING", ESMF_LOGMSG_INFO, rc=rc)
   if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
     line=__LINE__, &
     file=__FILE__)) &
     call ESMF_Finalize(endflag=ESMF_END_ABORT)
-    
+
   !-----------------------------------------------------------------------------
-  
+
   ! -> CREATE THE DRIVER
   drvComp = ESMF_GridCompCreate(name="driver", rc=rc)
   if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
     line=__LINE__, &
     file=__FILE__)) &
     call ESMF_Finalize(endflag=ESMF_END_ABORT)
-    
+
   ! -> SET DRIVER SERVICES
   call ESMF_GridCompSetServices(drvComp, driver_SS, userRc=userRc, rc=rc)
   if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
@@ -57,7 +59,7 @@ program WrfApp
     line=__LINE__, &
     file=__FILE__)) &
     call ESMF_Finalize(endflag=ESMF_END_ABORT)
-      
+
   ! RUN THE DRIVER
   call ESMF_GridCompRun(drvComp, userRc=userRc, rc=rc)
   if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
@@ -68,7 +70,7 @@ program WrfApp
     line=__LINE__, &
     file=__FILE__)) &
     call ESMF_Finalize(endflag=ESMF_END_ABORT)
-  
+
   ! FINALIZE THE DRIVER
   call ESMF_GridCompFinalize(drvComp, userRc=userRc, rc=rc)
   if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
@@ -81,8 +83,8 @@ program WrfApp
     call ESMF_Finalize(endflag=ESMF_END_ABORT)
 
   !-----------------------------------------------------------------------------
-  
-  call ESMF_LogWrite("mainApp FINISHED", ESMF_LOGMSG_INFO, rc=rc)
+
+  call ESMF_LogWrite("wrfApp FINISHED", ESMF_LOGMSG_INFO, rc=rc)
   if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
     line=__LINE__, &
     file=__FILE__)) &
@@ -91,4 +93,6 @@ program WrfApp
   ! Finalize ESMF
   call ESMF_Finalize()
   
+  CALL bmi_wrf_finalize()
+
 end program  

@@ -66,7 +66,6 @@ module WrfNuopcDriver
     type(ESMF_TimeInterval)       :: timeStep
     type(ESMF_Clock)              :: internalClock
 
-
     rc = ESMF_SUCCESS
     
     ! SetServices for MODEL component
@@ -82,7 +81,7 @@ module WrfNuopcDriver
       return  ! bail out
       
     ! set the driver clock
-    call ESMF_TimeSet(startTime, s = 0, rc=rc)
+    call ESMF_TimeSet(startTime, s = 0, rc=rc) ! It never comes out of this call
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
       line=__LINE__, &
       file=__FILE__)) &
@@ -112,7 +111,8 @@ module WrfNuopcDriver
       line=__LINE__, &
       file=__FILE__)) &
       return  ! bail out
-      
+
   end subroutine
 
 end module
+
