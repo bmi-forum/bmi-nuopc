@@ -8,7 +8,10 @@ module NUOPC_Model_BMI
     use NUOPC
     use NUOPC_Model, &
         model_routine_SS => SetServices ! Override NUOPC_Model SetServices
-    use esmfBmiAdapter ! ESMF BMI Adapter is a component class of NUOPC Model BMI
+    use esmfBmiAdapter, & ! ESMF BMI Adapter is a component class of NUOPC Model BMI
+        PrintBmiInfo => BMIAdapter_PrintComponentInfo, &
+        PrintBmiCurrentTime => BMIAdapter_PrintCurrentTime, &
+        PrintBmiFieldData => BMIAdapter_PrintFieldData
   
     implicit none
   
@@ -17,7 +20,10 @@ module NUOPC_Model_BMI
     public &
         SetModel, &
         SetServices, &
-        routine_Run
+        routine_Run, &
+        PrintBmiInfo, &
+        PrintBmiCurrentTime, &
+        PrintBmiFieldData
 
     public &
         label_AdvanceClock, &
@@ -26,13 +32,20 @@ module NUOPC_Model_BMI
         label_SetClock, &
         label_SetRunClock
 
-    character(:),allocatable :: modelConfigFile
+    character(:),allocatable        :: modelConfigFile
+    !character(:),allocatable        :: invarnames(:)
+    !character(:),allocatable        :: outvarnames(:)
 
 !-----------------------------------------------------------------------------
 contains
     !-----------------------------------------------------------------------------
 
-    subroutine SetModel(configFile, initialize,finalize,update, getStartTime, getEndTime, getCurrentTime, getTimeStep, getTimeUnits, getVarType, getVarUnits, getVarRank, getGridType, getGridShape, getGridSpacing, getGridOrigin, getGridCoord, getDouble, getDoubleAt, setDouble, setDoubleAt, getInputVarNames, getOutputVarNames, getComponentName, rc)
+    subroutine SetModel(configFile, initialize,finalize,update, getStartTime, getEndTime, &
+        getCurrentTime, getTimeStep, getTimeUnits, getVarType, getVarUnits, getVarRank, &
+        getGridType, getGridShape, getGridSpacing, getGridOrigin, getGridCoord, getReal, &
+        getReal2D, getReal3D, getDoubleAt, setDouble, setDoubleAt, getInputVarNames, getOutputVarNames, &
+        getComponentName, rc)
+
         character(*),intent(in) :: configFile
         procedure(bmiInitialize) :: initialize
         procedure(bmiUpdate) :: update
@@ -42,7 +55,9 @@ contains
         procedure(bmiGetVarUnits) :: getVarUnits
         procedure(bmiGetGridShape) :: getGridShape
         procedure(bmiGetGridSpacing) :: getGridSpacing
-        procedure(bmiGetDouble) :: getDouble
+        procedure(bmiGetReal),optional :: getReal
+        procedure(bmiGetReal2D),optional :: getReal2D
+        procedure(bmiGetReal3D),optional :: getReal3D
         procedure(bmiGetComponentName) :: getComponentName
         procedure(bmiGetStartTime),optional :: getStartTime
         procedure(bmiGetEndTime),optional :: getEndTime
@@ -79,7 +94,9 @@ contains
             getGridShape = getGridShape, &
             getGridSpacing = getGridSpacing, &
             getGridOrigin = getGridOrigin, &
-            getDouble = getDouble, &
+            getReal = getReal, &
+            getReal2D = getReal2D, &
+            getReal3D = getReal3D, &
             getDoubleAt = getDoubleAt, &
             setDouble = setDouble, &
             setDoubleAt = setDoubleAt, &
@@ -146,8 +163,6 @@ contains
 
         rc = ESMF_SUCCESS
 
-        print *,"Initialize Phase 1 Start"
-
         call BMIAdapter_Initialize(trim(adjustl(modelConfigFile)),rc) ! Initialize BMI Model
         if (ESMF_LogFoundError(rcToCheck=rc, msg="BMIAdapter Initialize BMI Failed", &
             line=__LINE__, &
@@ -166,28 +181,29 @@ contains
             file=__FILE__)) &
             return  ! bail out
 
-        call fieldDictionaryAddAll(rc=rc)
-        if(ESMF_LogFoundError(rcToCheck=rc,msg="Add Fields to Dictionary Failed", &
+        call fieldDictionaryAddImportFields(rc=rc)
+        if(ESMF_LogFoundError(rcToCheck=rc,msg="Add Import Fields to Dictionary Failed", &
             line=__LINE__, &
             file=__FILE__)) &
             return ! bail out
 
-#define WITHIMPORTFIELDS_OFF
-#ifdef WITHIMPORTFIELDS
-    call stateAdvertiseAllInputFields(importState,rc=rc)
-    if (ESMF_LogFoundError(rcToCheck=rc, msg="Advertise Input Fields Failed", &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
-#endif
+        call fieldDictionaryAddExportFields(rc=rc)
+        if(ESMF_LogFoundError(rcToCheck=rc,msg="Add Export Fields to Dictionary Failed", &
+            line=__LINE__, &
+            file=__FILE__)) &
+            return ! bail out
 
-            call stateAdvertiseAllOutputFields(exportState,rc)
-        if (ESMF_LogFoundError(rcToCheck=rc, msg="Advertise Output Fields Failed", &
+        call stateAdvertiseImportFields(importState,rc=rc)
+        if (ESMF_LogFoundError(rcToCheck=rc, msg="Advertise Input Fields Failed", &
             line=__LINE__, &
             file=__FILE__)) &
             return  ! bail out
 
-    print *,"Initialize Phase 1 Complete"
+        call stateAdvertiseExportFields(exportState,rc)
+        if (ESMF_LogFoundError(rcToCheck=rc, msg="Advertise Output Fields Failed", &
+            line=__LINE__, &
+            file=__FILE__)) &
+            return  ! bail out
 
     end subroutine
 
@@ -203,26 +219,32 @@ contains
         type(ESMF_Field)        :: field
         type(ESMF_Grid)         :: gridIn
         type(ESMF_Grid)         :: gridOut
+        character(len=22),allocatable :: invarnames(:),outvarnames(:)
 
         rc = ESMF_SUCCESS
 
         ! create a Grid object for Fields
-        gridIn = gridCreate(rc=rc)
+        call BMIAdapter_ImportFieldListGet(invarnames, rc)
+        if (rc .ne. ESMF_SUCCESS) return  ! bail out
+        call BMIAdapter_ExportFieldListGet(outvarnames, rc)
+        if (rc .ne. ESMF_SUCCESS) return  ! bail out
+
+        ! Add some logic for more robust grid creation here
+
+        gridOut = BMIAdapter_ESMFGridCreate(outvarnames(1),rc)
         if (ESMF_LogFoundError(rcToCheck=rc, msg="Grid Create error.", &
             line=__LINE__, &
             file=__FILE__)) &
             return  ! bail out
-        gridOut = gridIn ! for now out same as in
+        gridIn = gridOut ! for now out same as in
 
-#ifdef WITHIMPORTFIELDS
-  call stateRealizeInputFields(importState,gridIn,rc)
-  if (ESMF_LogFoundError(rcToCheck=rc, msg="Realize Input Fields Error", &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
-#endif
+        call stateRealizeImportFields(importState,gridIn,rc)
+        if (ESMF_LogFoundError(rcToCheck=rc, msg="Realize Input Fields Error", &
+            line=__LINE__, &
+            file=__FILE__)) &
+            return  ! bail out
 
-            call stateRealizeOutputFields(exportState,gridOut,rc)
+        call stateRealizeExportFields(exportState,gridOut,rc)
         if (ESMF_LogFoundError(rcToCheck=rc, msg="Realize Output Fields Error", &
             line=__LINE__, &
             file=__FILE__)) &
@@ -242,7 +264,7 @@ contains
 
         rc = ESMF_SUCCESS
 
-        call BMIAdapter_Update(rc)
+        call BMIAdapter_Update(rc=rc)
         if (ESMF_LogFoundError(rcToCheck=rc, msg="BMI Update Error", &
             line=__LINE__, &
             file=__FILE__)) &
@@ -270,82 +292,16 @@ contains
     subroutine ModelFinalize(model,rc)
         type(ESMF_Gridcomp) :: model
         integer,intent(out) :: rc
-        type(ESMF_State)    :: exportState
-        type(ESMF_Field)    :: field
 
         rc = ESMF_SUCCESS
 
-        ! query the Component for its exportState
-        call ESMF_GridCompGet(model, exportState=exportState, rc=rc)
-        if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        call BMIAdapter_Finalize(rc)
+        if (ESMF_LogFoundError(rcToCheck=rc, msg="finalize failed", &
             line=__LINE__, &
             file=__FILE__)) &
             return  ! bail out
-
-        call ESMF_StateGet(exportState, BMIAdapter_ExportFieldAt(1,rc), field=field, rc=rc)
-        if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-            line=__LINE__, &
-            file=__FILE__)) &
-            return  ! bail out
-
-        call ESMF_FieldPrint(field, rc=rc)
-        if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-            line=__LINE__, &
-            file=__FILE__)) &
-            return  ! bail out
-
-!        call BMIAdapter_Finalize(rc)
-!        if (ESMF_LogFoundError(rcToCheck=rc, msg="finalize failed", &
-!            line=__LINE__, &
-!            file=__FILE__)) &
-!            return  ! bail out
 
     end subroutine
-
-    !========================================
-    ! Add individual field to NUOPC Dictionary
-    !========================================
-
-    subroutine fieldDictionaryAdd(var_name, rc)
-        implicit none
-        character(len=*), intent (in) :: var_name
-        character(len=:),allocatable    :: units ! Deffered length for units string
-        character(len=10)    :: dict_units
-        integer                                     :: rc
-        logical                                     :: in_dictionary
-
-        rc = ESMF_SUCCESS
-
-        units = BMIAdapter_FieldUnitsGet (var_name,rc)
-
-        in_dictionary = NUOPC_FieldDictionaryHasEntry(trim(var_name), rc)
-        if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-            line=__LINE__, &
-            file=__FILE__)) &
-            return  ! bail out
-
-        if (in_dictionary) then
-            call NUOPC_FieldDictionaryGetEntry(trim(var_name), canonicalUnits=dict_units, rc=rc)
-            if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-                line=__LINE__, &
-                file=__FILE__)) &
-                return  ! bail out
-            print *,trim(var_name)," units: ",trim(dict_units)
-            if (dict_units .ne. units) then
-                rc=ESMF_RC_NOT_VALID
-                if (ESMF_LogFoundError(rcToCheck=rc, msg="Field units don't match!", &
-                    line=__LINE__, &
-                    file=__FILE__)) &
-                    return  ! bail out
-            end if
-        else
-            call NUOPC_FieldDictionaryAddEntry(trim(var_name), canonicalUnits=trim(units), rc=rc)
-            if (rc .ne. ESMF_SUCCESS) return
-            call ESMF_LogWrite("model field added <" // trim(var_name) // ":" // trim(units) // ">", ESMF_LOGMSG_INFO, rc=rc)
-            if (rc .ne. ESMF_SUCCESS) return
-        end if
-
-    end subroutine fieldDictionaryAdd
 
     !========================================
     ! Add All Fields To Dictionary
@@ -353,45 +309,125 @@ contains
     ! output variable arrays.
     !========================================
 
-    subroutine fieldDictionaryAddAll(rc)
+
+    subroutine fieldDictionaryAddImportFields(rc)
         implicit none
-        character(len=:),allocatable    :: invarnames(:), outvarnames(:)
-        integer                                     :: i
-        integer, intent(out)                        :: rc
+        integer, intent(out) :: rc
+
+        character(len=22),allocatable    :: invarnames(:)
+        character(len=:),allocatable    :: units ! Deffered length for units string
+        character(len=10)    :: dict_units
+        logical                                     :: in_dictionary
+        integer :: i
 
         rc = ESMF_SUCCESS
 
-        invarnames = BMIAdapter_ImportFieldListGet(rc)
+        call BMIAdapter_ImportFieldListGet(invarnames,rc)
         if (rc .ne. ESMF_SUCCESS) return
 
         do i=1,SIZE(invarnames)
-            call FieldDictionaryAdd(invarnames(i),rc=rc)
-            if (rc .ne. ESMF_SUCCESS) return
+
+            units = BMIAdapter_FieldUnitsGet (invarnames(i),rc)
+
+            in_dictionary = NUOPC_FieldDictionaryHasEntry(trim(invarnames(i)), rc)
+            if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+                line=__LINE__, &
+                file=__FILE__)) &
+                return  ! bail out
+
+            if (in_dictionary) then
+                call NUOPC_FieldDictionaryGetEntry(trim(invarnames(i)), canonicalUnits=dict_units, rc=rc)
+                if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+                    line=__LINE__, &
+                    file=__FILE__)) &
+                    return  ! bail out
+                if (dict_units .ne. units) then
+                    rc=ESMF_RC_NOT_VALID
+                    if (ESMF_LogFoundError(rcToCheck=rc, msg="Field units don't match!", &
+                        line=__LINE__, &
+                        file=__FILE__)) &
+                        return  ! bail out
+                end if
+            else
+                call NUOPC_FieldDictionaryAddEntry(trim(invarnames(i)), canonicalUnits=trim(units), rc=rc)
+                if (ESMF_LogFoundError(rcToCheck=rc, msg="Error adding to dictionary: " // trim(invarnames(i)), &
+                    line=__LINE__, &
+                    file=__FILE__)) &
+                    return  ! bail out
+
+                call ESMF_LogWrite("model field added to dictionary <" // trim(invarnames(i)) // ":" // trim(units) // ">", ESMF_LOGMSG_INFO, rc=rc)
+                if (rc .ne. ESMF_SUCCESS) return
+            end if
         end do
 
-        outvarnames = BMIAdapter_ExportFieldListGet(rc)
+    end subroutine fieldDictionaryAddImportFields
+
+    subroutine fieldDictionaryAddExportFields(rc)
+        implicit none
+        integer, intent(out) :: rc
+
+        character(len=22),allocatable    :: outvarnames(:)
+        character(len=:),allocatable    :: units ! Deffered length for units string
+        character(len=10)    :: dict_units
+        logical                                     :: in_dictionary
+        integer :: i
+
+        rc = ESMF_SUCCESS
+
+        call BMIAdapter_ExportFieldListGet(outvarnames, rc)
         if (rc .ne. ESMF_SUCCESS) return
 
-        do i=1,SIZE(outvarnames)
-            call FieldDictionaryAdd(outvarnames(i),rc=rc)
-            if (rc .ne. ESMF_SUCCESS) return
+        do i=1,size(outvarnames)
+
+            units = BMIAdapter_FieldUnitsGet (outvarnames(i),rc)
+
+            in_dictionary = NUOPC_FieldDictionaryHasEntry(trim(outvarnames(i)), rc)
+            if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+                line=__LINE__, &
+                file=__FILE__)) &
+                return  ! bail out
+
+            if (in_dictionary) then
+                call NUOPC_FieldDictionaryGetEntry(trim(outvarnames(i)), canonicalUnits=dict_units, rc=rc)
+                if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+                    line=__LINE__, &
+                    file=__FILE__)) &
+                    return  ! bail out
+                if (dict_units .ne. units) then
+                    rc=ESMF_RC_NOT_VALID
+                    if (ESMF_LogFoundError(rcToCheck=rc, msg="Field units don't match!", &
+                        line=__LINE__, &
+                        file=__FILE__)) &
+                        return  ! bail out
+                end if
+            else
+                call NUOPC_FieldDictionaryAddEntry(trim(outvarnames(i)), canonicalUnits=trim(units), rc=rc)
+                if (ESMF_LogFoundError(rcToCheck=rc, msg="Error adding to dictionary: " // trim(outvarnames(i)), &
+                    line=__LINE__, &
+                    file=__FILE__)) &
+                    return  ! bail out
+
+                call ESMF_LogWrite("model field added to dictionary <" // trim(outvarnames(i)) // ":" // trim(units) // ">", ESMF_LOGMSG_INFO, rc=rc)
+                if (rc .ne. ESMF_SUCCESS) return
+            end if
         end do
-    end subroutine fieldDictionaryAddAll
+
+    end subroutine fieldDictionaryAddExportFields
 
     !========================================
     ! Advertise all input fields to referenced state variable
     !========================================
 
-    subroutine stateAdvertiseAllInputFields(importState,rc)
+    subroutine stateAdvertiseImportFields(importState,rc)
         type(ESMF_State)        :: importState
         integer, intent(out)    :: rc
-        character(len=:),pointer    :: invarnames(:)
+        character(len=22),allocatable    :: invarnames(:)
         integer                                     :: i
 
         rc = ESMF_SUCCESS
 
         ! Get import variable names
-        invarnames = BMIAdapter_ExportFieldListGet(rc)
+        call BMIAdapter_ImportFieldListGet(invarnames, rc)
         if (rc .ne. ESMF_SUCCESS) return  ! bail out
 
         do i=1,SIZE(invarnames)
@@ -401,24 +437,26 @@ contains
                 line=__LINE__, &
                 file=__FILE__)) &
                 return  ! bail out
+
+            call ESMF_LogWrite("Model import field advertised <" // trim(invarnames(i)) // ">", ESMF_LOGMSG_INFO, rc=rc)
+            if (rc .ne. ESMF_SUCCESS) return
         end do
-    end subroutine stateAdvertiseAllInputFields
+    end subroutine stateAdvertiseImportFields
 
     !========================================
     ! Advertise all output fields ot referenced state variable
     !========================================
 
-    subroutine stateAdvertiseAllOutputFields(exportState,rc)
+    subroutine stateAdvertiseExportFields(exportState,rc)
         type(ESMF_State)        :: exportState
         integer, intent(out)    :: rc
-        character(len=:),allocatable    ::  outvarnames(:)
+        character(len=22),allocatable    ::  outvarnames(:)
         integer                                     :: i
 
         rc = ESMF_SUCCESS
 
         ! Get export variable names
-        outvarnames = BMIAdapter_ExportFieldListGet(rc)
-        print *,outvarnames
+        call BMIAdapter_ExportFieldListGet(outvarnames, rc)
         if (rc .ne. ESMF_SUCCESS) return  ! bail out
 
         do i=1,SIZE(outvarnames)
@@ -428,108 +466,104 @@ contains
                 line=__LINE__, &
                 file=__FILE__)) &
                 return  ! bail out
+
+            call ESMF_LogWrite("Model export field advertised <" // trim(outvarnames(i)) // ">", ESMF_LOGMSG_INFO, rc=rc)
+            if (rc .ne. ESMF_SUCCESS) return
         end do
 
-    end subroutine stateAdvertiseAllOutputFields
+    end subroutine stateAdvertiseExportFields
 
     !========================================
     !  Realize all input fields to import
     !========================================
 
-    subroutine stateRealizeInputFields(importState,gridIn,rc)
+    subroutine stateRealizeImportFields(importState,gridIn,rc)
         type(ESMF_State)     :: importState
         type(ESMF_Grid)         :: gridIn
         integer, intent(out) :: rc
 
         ! local variables
         type(ESMF_Field)        :: field
-        character(len=:),allocatable    :: invarnames(:)
+        character(len=22),allocatable    :: invarnames(:)
         integer                                     :: i
 
         rc = ESMF_SUCCESS
 
         ! Get import variables
-        invarnames = BMIAdapter_ImportFieldListGet(rc)
+        call BMIAdapter_ImportFieldListGet(invarnames, rc)
         if (rc .ne. ESMF_SUCCESS) return  ! bail out
 
         do i=1,size(invarnames)
             field = BMIAdapter_ESMFFieldCreate(gridIn,trim(invarnames(i)),rc=rc)
+            if (ESMF_LogFoundError(rcToCheck=rc, msg="Input Field Create Error: " // trim(invarnames(i)), &
+                line=__LINE__, &
+                file=__FILE__)) &
+                return  ! bail out
+
+            call ESMF_LogWrite("Model import field created <" // trim(invarnames(i)) // ">", ESMF_LOGMSG_INFO, rc=rc)
             if (rc .ne. ESMF_SUCCESS) return
 
             call NUOPC_StateRealizeField(importState, field=field, rc=rc)
+            if (ESMF_LogFoundError(rcToCheck=rc, msg="Input Field Realize Error: " // trim(invarnames(i)), &
+                line=__LINE__, &
+                file=__FILE__)) &
+                return  ! bail out
+
+            call ESMF_LogWrite("Model import field realized <" // trim(invarnames(i)) // ">", ESMF_LOGMSG_INFO, rc=rc)
             if (rc .ne. ESMF_SUCCESS) return
         end do
 
-    end subroutine stateRealizeInputFields
+        call ESMF_LogWrite("All model import fields created and realized.", ESMF_LOGMSG_INFO, rc=rc)
+        if (rc .ne. ESMF_SUCCESS) return
+
+    end subroutine stateRealizeImportFields
 
     !========================================
     ! Realize all output fields to export
     !========================================
-    subroutine stateRealizeOutputFields(exportState,gridOut,rc)
+    subroutine stateRealizeExportFields(exportState,gridOut,rc)
         type(ESMF_State)     :: exportState
         integer, intent(out) :: rc
         type(ESMF_Grid) :: gridOut
 
         ! local variables
         type(ESMF_Field)        :: field
-        character(len=:),allocatable    ::  outvarnames(:)
+        character(len=22),allocatable    ::  outvarnames(:)
         integer                                     :: i
 
         rc = ESMF_SUCCESS
 
         ! Get export variable names
-        outvarnames = BMIAdapter_ExportFieldListGet(rc)
+        call BMIAdapter_ExportFieldListGet(outvarnames, rc)
         if (rc .ne. ESMF_SUCCESS) return  ! bail out
 
         ! 26.6.9 ESMF_FieldCreate - Create a Field from Grid and Fortran array pointer
 
         do i=1,size(outvarnames)
             field = BMIAdapter_ESMFFieldCreate(grid=gridOut,name=outvarnames(i),rc=rc)
+            if (ESMF_LogFoundError(rcToCheck=rc, msg="Output Field Create Error: " // trim(outvarnames(i)), &
+                line=__LINE__, &
+                file=__FILE__)) &
+                return  ! bail out
+
+            call ESMF_LogWrite("Model export field created <" // trim(outvarnames(i)) // ">", ESMF_LOGMSG_INFO, rc=rc)
             if (rc .ne. ESMF_SUCCESS) return
 
             call NUOPC_StateRealizeField(exportState, field=field, rc=rc)
+            if (ESMF_LogFoundError(rcToCheck=rc, msg="Output Field Realize Error: " // trim(outvarnames(i)), &
+                line=__LINE__, &
+                file=__FILE__)) &
+                return  ! bail out
+
+            call ESMF_LogWrite("Model export field realized <" // trim(outvarnames(i)) // ">", ESMF_LOGMSG_INFO, rc=rc)
             if (rc .ne. ESMF_SUCCESS) return
-        end do
-    end subroutine stateRealizeOutputFields
 
-
-    !###########################
-    !# Section V:              #
-    !# Grid Adapter Procedures #
-    !###########################
-
-    function gridCreate(rc) result(return_grid)
-        integer,intent(out) :: rc
-        type(ESMF_Grid) :: return_grid
-
-        ! local variables
-        integer :: iterator1, iterator2
-        character(len=:),allocatable :: invarnames(:),outvarnames(:)
-        integer :: gridtype, gridrank
-
-        rc = ESMF_SUCCESS
-
-        invarnames = BMIAdapter_ImportFieldListGet(rc)
-        if (rc .ne. ESMF_SUCCESS) return  ! bail out
-        outvarnames = BMIAdapter_ExportFieldListGet(rc)
-        if (rc .ne. ESMF_SUCCESS) return  ! bail out
-
-        ! If input fields and outputs field do not share the same grid
-        ! then FAILURE.  Logic to create multiple field grids is not yet implemented
-        do iterator1=1,SIZE(invarnames)
-            do iterator2=1,SIZE(outvarnames)
-                if (.NOT.(BMIAdapter_GridComparison(invarnames(iterator1),outvarnames(iterator2),rc))) then
-                    rc = ESMF_RC_NOT_IMPL
-                    return ! If variables do not share the same grid then return
-                end if
-            end do
         end do
 
-        return_grid = BMIAdapter_ESMFGridCreate(invarnames(1),rc)
+        call ESMF_LogWrite("All model export fields created and realized.", ESMF_LOGMSG_INFO, rc=rc)
+        if (rc .ne. ESMF_SUCCESS) return
 
-    end function gridCreate
-
-
+    end subroutine stateRealizeExportFields
 
 end module NUOPC_Model_BMI
 

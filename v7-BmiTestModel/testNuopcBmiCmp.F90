@@ -8,7 +8,9 @@ module TestNuopcBmiCmp
     use NUOPC
     use NUOPC_Model_BMI, only: &
         bmi_model_routine_SM        => SetModel, &
-        bmi_model_routine_SS        => SetServices
+        bmi_model_routine_SS        => SetServices, &
+        PrintBmiInfo, &
+        PrintBmiFieldData
   
     implicit none
   
@@ -41,6 +43,7 @@ contains
              BMI_Get_grid_shape, &
              BMI_Get_grid_spacing, &
              BMI_Get_grid_origin, &
+             BMI_Get_Real_2D, &
              BMI_Get_double, &
              BMI_Get_double_at_indices, &
              BMI_Set_double, &
@@ -53,8 +56,8 @@ contains
 
         ! Set model - Pass NUOPC Model BMI config file and model procedures
         call bmi_model_routine_SM(configFile = "test.cfg", &
-            initialize = BMI_Initialize, &
-            finalize = BMI_Finalize, &
+            initialize = bmiInitializeWithPrint, &
+            finalize = bmiFinalizeWithPrint, &
             update = BMI_Update, &
             getStartTime = BMI_Get_start_time, &
             getEndTime = BMI_Get_end_time, &
@@ -68,7 +71,7 @@ contains
             getGridShape = BMI_Get_grid_shape, &
             getGridSpacing = BMI_Get_grid_spacing, &
             getGridOrigin = BMI_Get_grid_origin, &
-            getDouble = BMI_Get_double, &
+            getReal = BMI_Get_double, &
             getDoubleAt = BMI_Get_double_at_indices, &
             setDouble = BMI_Set_double, &
             setDoubleAt = BMI_Set_double_at_indices, &
@@ -91,4 +94,21 @@ contains
 
     end subroutine
   
+subroutine bmiInitializeWithPrint (config_file)
+    implicit none
+    character(*), intent(in) :: config_file
+
+    call BMI_Initialize(config_file)
+    call PrintBmiInfo
+
+end subroutine
+
+subroutine bmiFinalizeWithPrint ()
+    implicit none
+
+    call PrintBmiFieldData("surface_elevation")
+    call BMI_Finalize()
+
+end subroutine
+
 end module
