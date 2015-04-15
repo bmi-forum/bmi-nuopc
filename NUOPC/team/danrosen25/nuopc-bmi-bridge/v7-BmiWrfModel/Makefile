@@ -37,7 +37,10 @@ LOCAL_F90LINKLIBS = -lesmfbmi -lwrf_bmi
 ################################################################################
 ################################################################################
 
-.SUFFIXES: .f90 .F90 .c .C
+.SUFFIXES: .F .f90 .F90 .c .C
+
+%.o : %.F
+	$(ESMF_F90COMPILER) -c $(ESMF_F90COMPILEOPTS) $(LOCAL_F90COMPILEOPTS) $(ESMF_F90COMPILEPATHS) $(LOCAL_F90COMPILEPATHS) $(ESMF_F90COMPILEFREECPP) $(ESMF_F90COMPILECPPFLAGS) -DESMF_VERSION_MAJOR=$(ESMF_VERSION_MAJOR) $<
 
 %.o : %.f90
 	$(ESMF_F90COMPILER) -c $(ESMF_F90COMPILEOPTS) $(LOCAL_F90COMPILEOPTS) $(ESMF_F90COMPILEPATHS) $(LOCAL_F90COMPILEPATHS) $(ESMF_F90COMPILEFREENOCPP) $<
@@ -55,12 +58,13 @@ LOCAL_F90LINKLIBS = -lesmfbmi -lwrf_bmi
 all: wrfApp.exe
 # -----------------------------------------------------------------------------
 
-wrfApp.exe: wrfApp.o wrfNuopcDriver.o wrfNuopcBmiCmp.o
+wrfApp.exe: wrfApp.o wrfNuopcDriver.o wrfNuopcBmiCmp.o module_ncTool.o
 	$(ESMF_F90LINKER) $(ESMF_F90LINKOPTS) $(ESMF_F90LINKPATHS) $(ESMF_F90LINKRPATHS) $(LOCAL_F90LINKOPTS) $(LOCAL_F90LINKPATHS) -o $@ $^ $(ESMF_F90ESMFLINKLIBS) $(LOCAL_F90LINKLIBS)
 
 # module dependencies:
 wrfApp.o: wrfNuopcDriver.o
 wrfNuopcDriver.o: wrfNuopcBmiCmp.o
+wrfNuopcBmiCmp.o: module_ncTool.o
 
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------

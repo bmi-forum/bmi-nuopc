@@ -28,7 +28,7 @@ module TestModel_class
 
     ! start exchange item list
     !integer, parameter :: input_item_count = 1
-    integer, parameter :: input_item_count = 2
+    integer, parameter :: input_item_count = 0
     integer, parameter :: output_item_count = 1
     integer, parameter :: item_name_length = 22
     !      character (len=item_name_length), target, &
@@ -36,7 +36,8 @@ module TestModel_class
     !        input_items = (/'surface_elevation    '/)
     character (len=item_name_length), target, &
         dimension (input_item_count) :: &
-        input_items = (/'surface_elevation    ','surface_test         '/)
+        input_items
+        ! input_items = (/'surface_elevation    ','surface_test         '/)
 
     character (len=item_name_length), target, &
         dimension (output_item_count) :: &
@@ -244,6 +245,15 @@ contains
 
         origin(1) = 0.
         origin(2) = 0.
+    end subroutine
+
+    subroutine getReal2D (var_name,dest)
+        implicit none
+        character (len=*), intent (in) :: var_name
+        real, intent (inout) :: dest(:,:)
+        ! end declaration section
+
+        dest = self%z(1,1)
     end subroutine
 
     subroutine getDouble (var_name, dest) ! compiler standards for order of dimensions

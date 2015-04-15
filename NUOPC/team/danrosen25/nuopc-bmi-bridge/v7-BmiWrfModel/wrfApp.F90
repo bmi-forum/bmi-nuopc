@@ -17,7 +17,7 @@ program WrfApp
   CALL bmi_wrf_initialize ("noConfig")
 
   ! Initialize ESMF
-  call ESMF_Initialize(defaultlogfilename="VMUserMpiEx.Log", &
+  call ESMF_Initialize(defaultlogfilename="VmWrfMpi.Log", &
                     logkindflag=ESMF_LOGKIND_MULTI, defaultCalkind=ESMF_CALKIND_GREGORIAN, rc=rc)
   if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
     line=__LINE__, &
@@ -91,7 +91,7 @@ program WrfApp
     call ESMF_Finalize(endflag=ESMF_END_ABORT)
 
   ! Finalize ESMF
-  call ESMF_Finalize()
+  call ESMF_Finalize(endflag=ESMF_END_KEEPMPI)
   
   CALL bmi_wrf_finalize()
 

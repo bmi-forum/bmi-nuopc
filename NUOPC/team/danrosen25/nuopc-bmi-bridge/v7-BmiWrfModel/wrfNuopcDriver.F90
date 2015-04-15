@@ -18,8 +18,8 @@ module WrfNuopcDriver
   private
   
   ! private module data --> ONLY PARAMETERS
-  integer, parameter            :: stepCount = 6
-  real(ESMF_KIND_R8), parameter :: stepTime  = 10.D0  ! step time [s]
+  integer, parameter            :: stepCount = 60
+  real(ESMF_KIND_R8), parameter :: stepTime  = 600.D0  ! step time [s]
                                                       ! should be parent step
 
   public SetServices

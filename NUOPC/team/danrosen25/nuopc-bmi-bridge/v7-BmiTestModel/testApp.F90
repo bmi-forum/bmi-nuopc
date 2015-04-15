@@ -13,8 +13,6 @@ program testApp
     integer                       :: rc, userRc
     type(ESMF_GridComp)           :: drvComp
 
-    CALL BMI_Initialize ("test.cfg")
-
   call ESMF_Initialize(defaultCalkind=ESMF_CALKIND_GREGORIAN, rc=rc)
   if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
     line=__LINE__, &
@@ -89,6 +87,5 @@ program testApp
 
   ! Finalize ESMF
   call ESMF_Finalize()
-  CALL BMI_Finalize ()
 
 end program  

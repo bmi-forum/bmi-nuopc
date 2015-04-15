@@ -186,6 +186,18 @@ subroutine BMI_Get_grid_origin (var_name, origin)
 
 end subroutine BMI_Get_grid_origin
 
+
+subroutine BMI_Get_Real_2D(var_name,dest)
+    use TestModel_class, only: modelGetReal2D => getReal2D
+    implicit none
+      character(len=*), intent(in) ::  var_name
+
+       real :: dest(1,1)
+
+      call modelGetReal2D(var_name,dest)
+end subroutine  BMI_Get_Real_2D
+
+
 subroutine BMI_Get_double (var_name, dest)
     use TestModel_class, only: modelGetDouble => getDouble
     implicit none

@@ -23,7 +23,10 @@ module esmfBmiAdapter
         BMIAdapter_ExportCount, &
         BMIAdapter_ImportFieldAt, &
         BMIAdapter_ExportFieldAt, &
-        BMIAdapter_GridComparison
+        BMIAdapter_GridComparison, &
+        BMIAdapter_PrintComponentInfo, &
+        BMIAdapter_PrintCurrentTime, &
+        BMIAdapter_PrintFieldData
 
     public bmiInitialize, &
         bmiUpdate, &
@@ -41,7 +44,9 @@ module esmfBmiAdapter
         bmiGetGridSpacing, &
         bmiGetGridOrigin, &
         bmiGetGridCoord, &
-        bmiGetDouble, &
+        bmiGetReal, &
+        bmiGetReal2D, &
+        bmiGetReal3D, &
         bmiGetDoubleAt, &
         bmiSetDouble, &
         bmiSetDoubleAt, &
@@ -53,7 +58,8 @@ module esmfBmiAdapter
         subroutine bmiInitialize(config_file)
             character(len=*),intent(in) ::  config_file
         end subroutine
-        subroutine bmiUpdate()
+        subroutine bmiUpdate(dt)
+            real, optional, intent(in) :: dt
         end subroutine
         subroutine bmiFinalize()
         end subroutine
@@ -105,9 +111,17 @@ module esmfBmiAdapter
             integer, intent(in) :: dimension
             real, dimension (:), intent (out) :: gridX
         end subroutine
-        subroutine bmiGetDouble(var_name, dest)
+        subroutine bmiGetReal(var_name, dest)
+            character (len=*),intent(in) :: var_name
+            real, pointer, intent(inout) :: dest(:)
+        end subroutine
+        subroutine bmiGetReal2D(var_name, dest)
             character (len=*), intent (in) :: var_name
-            real, pointer, intent (inout) :: dest(:)
+            real, pointer, intent (inout) :: dest(:,:)
+        end subroutine
+        subroutine bmiGetReal3D(var_name, dest)
+            character (len=*), intent (in) :: var_name
+            real, pointer, intent (inout) :: dest (:,:,:)
         end subroutine
         subroutine bmiGetDoubleAt(var_name, dest, inds)
             character (len=*), intent (in) :: var_name
@@ -157,7 +171,9 @@ module esmfBmiAdapter
     procedure(bmiGetGridSpacing), pointer :: pBmiGetGridSpacing => null()
     procedure(bmiGetGridOrigin), pointer :: pBmiGetGridOrigin => null()
     procedure(bmiGetGridCoord), pointer :: pBmiGetGridCoord => null()
-    procedure(bmiGetDouble), pointer :: pBmiGetDouble => null()
+    procedure(bmiGetReal),pointer :: pBmiGetReal => null()
+    procedure(bmiGetReal2D), pointer :: pBmiGetReal2D => null()
+    procedure(bmiGetReal3D), pointer :: pBmiGetReal3D => null()
     procedure(bmiGetDoubleAt), pointer :: pBmiGetDoubleAt => null()
     procedure(bmiSetDouble), pointer :: pBmiSetDouble => null()
     procedure(bmiSetDoubleAt), pointer :: pBmiSetDoubleAt => null()
@@ -186,7 +202,7 @@ module esmfBmiAdapter
     integer, parameter :: BMI_GRID_TYPE_NUMBER = 5
 
     integer, parameter :: BMI_MAXVARNAMESTR = 22
-    integer, parameter :: BMI_MAXCOMPNAMESTR = 19
+    integer, parameter :: BMI_MAXCOMPNAMESTR = 22
     integer, parameter :: BMI_MAXUNITSSTR = 22
 
     integer,parameter :: BMI_CHAR = 1
@@ -212,8 +228,8 @@ contains
     subroutine BMIAdapter_SetModel(initialize,finalize,update, getStartTime, getEndTime, &
         getCurrentTime, getTimeStep, getTimeUnits, getVarType, getVarUnits, &
         getVarRank, getGridType, getGridShape, getGridSpacing, getGridOrigin, &
-        getGridCoord,getDouble, getDoubleAt, setDouble, setDoubleAt, &
-        getInputVarNames, getOutputVarNames, getComponentName, rc)
+        getGridCoord, getReal, getReal2D, getReal3D, getDoubleAt, setDouble, &
+        setDoubleAt, getInputVarNames, getOutputVarNames, getComponentName, rc)
 
         procedure(bmiInitialize) :: initialize
         procedure(bmiUpdate) :: update
@@ -223,7 +239,9 @@ contains
         procedure(bmiGetVarUnits) :: getVarUnits
         procedure(bmiGetGridShape) :: getGridShape
         procedure(bmiGetGridSpacing) :: getGridSpacing
-        procedure(bmiGetDouble) :: getDouble
+        procedure(bmiGetReal),optional :: getReal
+        procedure(bmiGetReal2D),optional :: getReal2D
+        procedure(bmiGetReal3D),optional :: getReal3D
         procedure(bmiGetComponentName) :: getComponentName
         procedure(bmiGetStartTime),optional :: getStartTime
         procedure(bmiGetEndTime),optional :: getEndTime
@@ -240,7 +258,6 @@ contains
         procedure(bmiGetOutputVarNames),optional :: getOutputVarNames
 
         integer, intent(out) :: rc
-
         rc = ESMF_SUCCESS
 
         pBmiInitialize => initialize
@@ -251,9 +268,22 @@ contains
         pBmiGetVarUnits => getVarUnits
         pBmiGetGridShape => getGridShape
         pBmiGetGridSpacing => getGridSpacing
-        pBmiGetDouble => getDouble
         pBmiGetComponentName => getComponentName
 
+        if(present(getReal)) then
+            pBmiGetReal => getReal
+        end if
+
+        if(present(getReal2D)) then
+            pBmiGetReal2D => getReal2D
+        else
+            pBmiGetReal2D => defaultGetReal2D
+        end if
+        if(present(getReal3D)) then
+            pBmiGetReal3D => getReal3D
+        else
+            pBmiGetReal3D => defaultGetReal3D
+        end if
         if(present(getStartTime)) then
             pBmiGetStartTime => getStartTime
         else
@@ -336,7 +366,7 @@ contains
             associated(pBmiGetGridSpacing) .and. &
             associated(pBmiGetGridOrigin) .and. &
             associated(pBmiGetGridCoord) .and. &
-            associated(pBmiGetDouble) .and. &
+            (associated(pBmiGetReal2D) .or. associated(pBmiGetReal3D)) .and. &
             associated(pBmiGetDoubleAt) .and. &
             associated(pBmiSetDouble) .and. &
             associated(pBmiSetDoubleAt) .and. &
@@ -379,7 +409,7 @@ contains
 
         if (state%set) then
 
-            ! BMI has already been initialized before driver for MPI
+            call pBmiInitialize(file)
 
             ! To be discussed: Initialization requirements
             call pBmiGetComponentName(compname)
@@ -391,8 +421,6 @@ contains
                 call BMIAdapter_LogWrite("Model initialized <" // trim(compname) //">", &
                     ESMF_LOGMSG_INFO, rc=rc)
                 if (rc .ne. ESMF_SUCCESS) return
-                call BMIAdapter_PrintComponentInfo(rc) ! Print BMI information after initializing
-                call BMIAdapter_PrintAllVarInfo(rc)
             else
                 rc = ESMF_RC_OBJ_INIT
                 if (BMIAdapter_LogFoundError(rcToCheck=rc, &
@@ -417,7 +445,8 @@ contains
     ! Update BMI model
     !========================================
 
-    subroutine BMIAdapter_Update(rc)
+    subroutine BMIAdapter_Update(dt, rc)
+        real, optional, intent(in) :: dt
         integer, intent(out) :: rc
         character(BMI_MAXCOMPNAMESTR),pointer :: compname
 
@@ -425,13 +454,11 @@ contains
 
         if (state%initialized) then
             if(.not. state%finalized) then
-                call pBmiUpdate() ! Update BMI
-                ! call BMIAdapter_PrintCurrentTime() ! Print BMI model time after update
+                call pBmiUpdate(dt) ! Update BMI
                 call pBmiGetComponentName(compname)
                 call BMIAdapter_LogWrite("Model updated <" // trim(compname) //">", &
                     ESMF_LOGMSG_INFO, rc=rc)
                 if (rc .ne. ESMF_SUCCESS) return
-                call BMIAdapter_PrintCurrentTime(rc)
             else
                 rc = ESMF_RC_OBJ_INIT
                 if (BMIAdapter_LogFoundError(rcToCheck=rc, &
@@ -524,27 +551,27 @@ contains
         field=varlist(id)
     end function BMIAdapter_ExportFieldAt
 
-    function BMIAdapter_ImportFieldListGet(rc) result(list)
+    subroutine BMIAdapter_ImportFieldListGet(names,rc)
         integer, intent(out) :: rc
-        character(len=BMI_MAXVARNAMESTR),dimension(:),allocatable    :: list
+        character(len=*),dimension(:),allocatable,intent(out) :: names
         character(len=BMI_MAXVARNAMESTR),pointer :: varlist(:)
 
         rc = ESMF_SUCCESS
         call pBmiGetInputVarNames(varlist)
-        allocate(list(size(varlist)))
-        list=varlist
-    end function BMIAdapter_ImportFieldListGet
+        allocate(names(size(varlist)))
+        names=varlist
+    end subroutine BMIAdapter_ImportFieldListGet
 
-    function BMIAdapter_ExportFieldListGet(rc) result(list)
+    subroutine BMIAdapter_ExportFieldListGet(names,rc)
         integer, intent(out) :: rc
-        character(len=BMI_MAXVARNAMESTR),dimension(:),allocatable    :: list
+        character(len=*),dimension(:),allocatable,intent(out)    :: names
         character(len=BMI_MAXVARNAMESTR),pointer :: varlist(:)
 
         rc = ESMF_SUCCESS
         call pBmiGetOutputVarNames(varlist)
-        allocate(list(size(varlist)))
-        list=varlist
-    end function BMIAdapter_ExportFieldListGet
+        allocate(names(size(varlist)))
+        names=varlist
+    end subroutine BMIAdapter_ExportFieldListGet
 
     function BMIAdapter_FieldUnitsGet(field,rc) result(units)
         integer, intent(out) :: rc
@@ -554,15 +581,6 @@ contains
         rc = ESMF_SUCCESS
         call pBmiGetVarUnits(field,units)
     end function BMIAdapter_FieldUnitsGet
-
-    function BMIAdapter_FieldRank(varname,rc) result(rank)
-        integer, intent(out) :: rc
-        character(*),intent(in) :: varname
-        integer :: rank
-
-        rc = ESMF_SUCCESS
-        call pBmiGetVarRank(varname,rank)
-    end function BMIAdapter_FieldRank
 
     !######################################
     !# Create ESMF objects based on model #
@@ -628,29 +646,64 @@ contains
         type(ESMF_Field) :: field
         type(ESMF_Grid),intent(in) :: grid
         character(*),intent(in) :: name
-        integer :: rc
-        real,pointer:: bmi1d(:)
-        real,pointer:: bmi2d(:,:)
-        real,pointer:: arrayportion(:,:)
-        integer, dimension (2) :: gridshape
-        integer, dimension(2) :: gec
+        integer,intent(out) :: rc
+
+        integer :: rank
 
         rc = ESMF_SUCCESS
 
-        call pBmiGetGridShape ( name, gridshape)
+        call pBmiGetVarRank(name,rank)
+        field = BMIAdapter_ESMFFieldCreateRank(grid,name,rank,rc)
+
+    end function BMIAdapter_ESMFFieldCreate
+
+    function BMIAdapter_ESMFFieldCreateRank(grid,name,rank,rc) result(field)
+        type(ESMF_Field) :: field
+        type(ESMF_Grid),intent(in) :: grid
+        character(*),intent(in) :: name
+        integer,intent(in) :: rank
+        integer,intent(out) :: rc
+        real,pointer :: bmiflat (:)
+        real,pointer :: bmireshape_2D(:,:)
+        real,pointer :: bmireshape_3D(:,:,:)
+        real,pointer :: arrayportion_1D (:)
+        real,pointer :: arrayportion_2D (:,:)
+        real,pointer :: arrayportion_3D (:,:,:)
+        integer, dimension (rank) :: gridshape
+        integer, dimension(rank) :: gec
+
+        rc = ESMF_SUCCESS
+
+        call pBmiGetGridShape (name, gridshape)
 
         call ESMF_GridGet(grid, staggerloc=ESMF_STAGGERLOC_CENTER, localDE = 0, &
             exclusiveCount=gec, rc=rc)
-        if (rc /= ESMF_SUCCESS) call ESMF_Finalize(endflag=ESMF_END_ABORT)
+        if (rc .ne. ESMF_SUCCESS) call ESMF_Finalize(endflag=ESMF_END_ABORT)
 
-        call pBmiGetDouble(name,bmi1d)
+        if(rank == 1) then
+            call pBmiGetReal(name,bmiflat)
+            arrayportion_1D => bmiflat(1:gec(1))
+            field = ESMF_FieldCreate(grid, farrayptr=arrayportion_1D,name=name, rc=rc)
+        else if(rank == 2) then
+            call pBmiGetReal(name,bmiflat)
+            bmireshape_2D (1:gridshape(1), 1:gridshape(2)) => bmiflat
+            arrayportion_2D => bmireshape_2D(1:gec(1),1:gec(2))
+            field = ESMF_FieldCreate(grid, farrayptr=arrayportion_2D,name=name, rc=rc)
+        else if(rank == 3) then
+            call pBmiGetReal(name,bmiflat)
+            bmireshape_3D (1:gridshape(1), 1:gridshape(2), 1:gridshape(3)) => bmiflat
+            arrayportion_3D => bmireshape_3D(1:gec(1),1:gec(2),1:gec(3))
+            field = ESMF_FieldCreate(grid, farrayptr=arrayportion_3D,name=name, rc=rc)
+        else
+            rc = ESMF_RC_NOT_IMPL
+            if (BMIAdapter_LogFoundError(rcToCheck=rc, &
+                msg="Field rank out of bounds.", &
+                line=__LINE__, &
+                file=__FILE__)) &
+                return  ! bail out
+        end if
 
-        bmi2d (1:gridshape(1), 1:gridshape(2)) => bmi1d
-        arrayportion => bmi2d(1:gec(1),1:gec(2))
-        !bmi2d = reshape(bmi1d,(/gec(1),gec(2)/))
-
-        field = ESMF_FieldCreate(grid, farrayptr=arrayportion,name=name, rc=rc)
-    end function BMIAdapter_ESMFFieldCreate
+    end function BMIAdapter_ESMFFieldCreateRank
 
     !========================================
     ! Create grid based on variable
@@ -662,10 +715,12 @@ contains
         character(*),intent(in) ::varname
 
         ! Local Variables
+
         integer :: rank
 
         rc = ESMF_SUCCESS
-        return_grid = gridCreateNoDecomp(varname,BMIAdapter_FieldRank(varname,rc),rc)
+        call pBmiGetVarRank(varname,rank)
+        return_grid = gridCreateNoDecomp(varname,rank,rc)
     end function BMIAdapter_ESMFGridCreate
 
     function minIndex(varname,rank)
@@ -823,7 +878,7 @@ contains
         if(rank .lt. 1) then
             rc = ESMF_RC_OBJ_CREATE
             if (BMIAdapter_LogFoundError(rcToCheck=rc, &
-                msg="Cannot create grid with rank less than one!", &
+                msg="Cannot create grid with rank less than one! <"//trim(varname)//">", &
                 line=__LINE__, &
                 file=__FILE__)) &
                 return  ! bail out
@@ -935,7 +990,7 @@ contains
         end select
 
         if (rc .ne. ESMF_SUCCESS) return
-        call BMIAdapter_LogWrite("Grid created: " // varname, ESMF_LOGMSG_INFO, rc=rc)
+        call BMIAdapter_LogWrite("Grid created: " // trim(varname), ESMF_LOGMSG_INFO, rc=rc)
         if (rc .ne. ESMF_SUCCESS) return
 
     END FUNCTION gridCreateNoDecomp
@@ -944,14 +999,37 @@ contains
     ! Grid Comparison Function for BMI variables
     !========================================
 
-    function BMIAdapter_GridComparison(var_name_1,var_name_2,rc) result (equivalent)
+    function BMIAdapter_GridComparison(var_name_1,var_name_2,rc) result(equivalent)
         character (BMI_MAXVARNAMESTR), intent(in) :: var_name_1,var_name_2
-        real :: spacing_1(1:2), spacing_2(1:2)
-        real :: origin_1(1:2), origin_2(1:2)
-        integer :: shape_1(1:2), shape_2(1:2)
+        logical :: equivalent
+        integer :: rank_1, rank_2
+        integer, intent(out) :: rc
+
+        rc = ESMF_SUCCESS
+        equivalent = .true.
+
+        call pBmiGetVarRank(var_name_1,rank_1)
+        call pBmiGetVarRank(var_name_2,rank_2)
+
+        if(rank_1 .ne. rank_2) then
+            equivalent = .false.
+            return
+        end if
+
+        equivalent = BMIAdapter_GridComparisonRank(var_name_1,var_name_2,rank_1,rank_2,rc)
+
+    end function BMIAdapter_GridComparison
+
+    function BMIAdapter_GridComparisonRank(var_name_1,var_name_2,rank_1,rank_2,rc) result (equivalent)
+        character (BMI_MAXVARNAMESTR), intent(in) :: var_name_1,var_name_2
+        integer, intent (in) :: rank_1, rank_2
+        integer, intent(out) :: rc
+
+        real :: spacing_1(1:rank_1), spacing_2(1:rank_2)
+        real :: origin_1(1:rank_1), origin_2(1:rank_2)
+        integer :: shape_1(1:rank_1), shape_2(1:rank_2)
         integer :: gridtype_1, gridtype_2
         logical :: equivalent
-        integer, intent(out) :: rc
 
         rc = ESMF_SUCCESS
         equivalent = .true.
@@ -988,7 +1066,7 @@ contains
             return
         end if
 
-    end function BMIAdapter_GridComparison
+    end function BMIAdapter_GridComparisonRank
 
     !###########################
     !# Section nnnn            #
@@ -999,7 +1077,7 @@ contains
     !=Print Model Information=
     !=========================
 
-    subroutine BMIAdapter_PrintComponentInfo(rc)
+    subroutine BMIAdapter_PrintComponentInfo()
         implicit none
         character(len=BMI_MAXVARNAMESTR), pointer        :: invarnames(:)
         character(len=BMI_MAXVARNAMESTR), pointer     :: outvarnames(:)
@@ -1009,9 +1087,7 @@ contains
         real                            :: end
         real                            :: step
         integer :: i
-        integer, intent(out) :: rc
-
-        rc = ESMF_SUCCESS
+        integer :: rank
 
         call pBmiGetInputVarNames(invarnames)
         call pBmiGetOutputVarNames(outvarnames)
@@ -1031,6 +1107,19 @@ contains
         print *, "     # Output Variables: ",SIZE(outvarnames)
         print *, "     Output Variable Names: ",outvarnames
         print *, "     Component Name: ",compname
+
+        do i=1,SIZE(invarnames)
+            print *,"In Variable Info: ",invarnames(i)
+            call pBmiGetVarRank(invarnames(i),rank)
+            call BMIAdapter_PrintVarInfoRank(invarnames(i),rank)
+        end do
+
+        do i=1,SIZE(outvarnames)
+            print *,"Out Variable Info: ",outvarnames(i)
+            call pBmiGetVarRank(outvarnames(i),rank)
+            call BMIAdapter_PrintVarInfoRank(outvarnames(i),rank)
+        end do
+
     end subroutine
 
     !========================================
@@ -1038,18 +1127,15 @@ contains
     ! variable
     !========================================
 
-    subroutine BMIAdapter_PrintVarInfo(var_name,var_rank,rc)
+    subroutine BMIAdapter_PrintVarInfoRank(var_name,var_rank)
         implicit none
         character (len=BMI_MAXVARNAMESTR), intent (in) :: var_name
         integer, intent(in) :: var_rank
-        integer, intent(out)     :: rc
         integer             :: type
         character(len=10)   :: units, dict_units ! Assumed length for units string
         integer             :: gtype
-        integer     :: gshape(1:var_rank)   ! Assumed shape for grid shape array
-        real        :: gspacing(1:var_rank), gorigin(1:var_rank) ! Assumed shape for grid spacing array
-
-        rc = ESMF_SUCCESS
+        integer,dimension(1:var_rank)     :: gshape  ! Assumed shape for grid shape array
+        real, dimension(1:var_rank)       :: gspacing, gorigin ! Assumed shape for grid spacing array
 
         call pBmiGetVarType ( var_name, type)
         call pBmiGetVarUnits ( var_name, units)
@@ -1068,71 +1154,60 @@ contains
 
     end subroutine
 
-    !========================================
-    ! Print Field Value
-    !========================================
+        !========================================
+        ! Print Field Data
+        !========================================
 
-    SUBROUTINE BMIAdapter_PrintFieldArray(state,varname,rc)
-        type(ESMF_State),intent(in) :: state
-        character(*),intent(in) :: varname
-        integer,intent(out) :: rc
+    subroutine BMIAdapter_PrintFieldData(name)
+        character(*),intent(in) :: name
+        integer :: rank
 
-        type(ESMF_Field) :: field
-        type(ESMF_Array) :: array
+        call pBmiGetVarRank(name,rank)
+        call BMIAdapter_PrintFieldDataRank(name,rank)
 
-        rc = ESMF_SUCCESS
+    end subroutine
 
-        call ESMF_StateGet(state,itemName=varname,field=field,rc=rc)
-        if(rc .ne. ESMF_SUCCESS) return
-        call ESMF_FieldGet(field, array=array, rc=rc)
-        if(rc .ne. ESMF_SUCCESS) return
-        call ESMF_ArrayPrint(array, rc=rc)
-        if(rc .ne. ESMF_SUCCESS) return
+    subroutine BMIAdapter_PrintFieldDataRank(name, rank)
+        character(*),intent(in) :: name
+        integer,intent(in) :: rank
+        real,pointer :: bmiflat (:)
+        real,pointer :: bmireshape_2D (:,:)
+        real,pointer :: bmireshape_3D (:,:,:)
+        integer, dimension (rank) :: gridshape
 
-    END SUBROUTINE
+        call pBmiGetGridShape (name, gridshape)
+
+        if(rank == 1) then
+            call pBmiGetReal(name,bmiflat)
+            print *,"Field Data: ",trim(name)
+            print *,bmiflat
+        else if(rank == 2) then
+            call pBmiGetReal(name,bmiflat)
+            bmireshape_2D (1:gridshape(1), 1:gridshape(2)) => bmiflat
+            print *,"Field Data: ",trim(name)
+            print *,bmireshape_2D
+        else if(rank == 3) then
+            call pBmiGetReal(name,bmiflat)
+            bmireshape_3D (1:gridshape(1), 1:gridshape(2), 1:gridshape(3)) => bmiflat
+            print *,"Field Data: ",trim(name)
+            print *,bmireshape_3D
+        else
+            print *,"Field Data: ",trim(name)
+            print *,"<Error: Rank out of range. Cannot print field data.>"
+        end if
+    end subroutine
 
     !========================================
     ! Print BMI model current time
     !========================================
 
-    SUBROUTINE BMIAdapter_PrintCurrentTime(rc)
+    SUBROUTINE BMIAdapter_PrintCurrentTime()
         real                          :: bmi_time
-        integer,intent(out) :: rc
-
-        rc = ESMF_SUCCESS
 
         call pBmiGetCurrentTime(bmi_time)
         print *,"BMI Current Time: ", bmi_time
 
     END SUBROUTINE
-
-    !========================================
-    ! Iterate over all input and output
-    ! variables and print info.
-    !========================================
-
-    subroutine BMIAdapter_PrintAllVarInfo(rc)
-        implicit none
-        integer,intent(out) :: rc
-        character(len=BMI_MAXVARNAMESTR), pointer    :: invarnames(:), outvarnames(:)
-        integer                                     :: i
-
-        rc = ESMF_SUCCESS
-
-        call pBmiGetInputVarNames(invarnames)
-        call pBmiGetOutputVarNames(outvarnames)
-
-        do i=1,SIZE(invarnames)
-            print *,"In Variable Info: ",invarnames(i)
-            call BMIAdapter_PrintVarInfo(invarnames(i),BMIAdapter_FieldRank(invarnames(i),rc),rc)
-        end do
-
-        do i=1,SIZE(outvarnames)
-            print *,"Out Variable Info: ",outvarnames(i)
-            call BMIAdapter_PrintVarInfo(outvarnames(i),BMIAdapter_FieldRank(invarnames(i),rc),rc)
-        end do
-
-    end subroutine
 
     !############################
     !# BMI Adapter Log Wrappers #
@@ -1186,20 +1261,20 @@ contains
     subroutine defaultGetEndTime (end)
         implicit none
         real, intent (out) :: end
-        end = 100.
+        end = 60.
     end subroutine
 
     subroutine defaultGetCurrentTime (time)
         implicit none
         real, intent (out) :: time
-        time = 1.
+        time = 0.
     end subroutine
 
     subroutine defaultGetVarType (var_name, type)
         implicit none
         character (len=*), intent (in) :: var_name
         integer, intent (out) :: type
-        type = 8
+        type = BMI_VAR_TYPE_DOUBLE
     end subroutine
 
     subroutine defaultGetVarRank (var_name, rank)
@@ -1213,15 +1288,30 @@ contains
         implicit none
         character (len=*), intent (in) :: var_name
         integer, intent (out) :: type
-        type = 1
+        type = BMI_GRID_TYPE_UNIFORM
     end subroutine
 
     subroutine defaultGetGridOrigin (var_name, origin)
         implicit none
         character (len=*), intent (in) :: var_name
         real, dimension (:), intent (out) :: origin
-        origin(1) = 0.
-        origin(2) = 0.
+        integer :: rank
+
+        call pBmiGetVarRank(var_name,rank)
+        call defaultgetGridOriginRank(var_name,rank,origin)
+
+    end subroutine
+
+    subroutine defaultGetGridOriginRank(var_name, rank, origin)
+        implicit none
+        integer, intent(in) :: rank
+        character (len=*), intent(in) :: var_name
+        real, dimension(rank), intent(out) :: origin
+        integer :: i
+
+        do i=1,rank
+            origin(i) = 0.
+        end do
     end subroutine
 
     subroutine defaultGetGridCoord(var_name,dimension,gridX)
@@ -1258,8 +1348,7 @@ contains
         character (*),pointer, intent (out) :: names(:)
 
         character (len=BMI_MAXVARNAMESTR), target, &
-            dimension (1) :: &
-            input_items = (/'dummy input variable'/)
+            dimension (0) :: input_items
 
         names => input_items
 
@@ -1269,11 +1358,27 @@ contains
         implicit none
         character (*),pointer, intent (out) :: names(:)
         character (len=BMI_MAXVARNAMESTR), target, &
-            dimension (1) :: &
-            output_items = (/'dummy output variable'/)
-          ! end exchange item list
+            dimension (0) :: output_items
 
         names => output_items
+    end subroutine
+
+    subroutine defaultGetReal2D (var_name,dest)
+        implicit none
+        character (len=*), intent (in) :: var_name
+        real, pointer, intent (inout) :: dest(:,:)
+        real, target, dimension(0,0) :: empty
+
+        dest => empty
+    end subroutine
+
+    subroutine defaultGetReal3D (var_name,dest)
+        implicit none
+        character (len=*), intent (in) :: var_name
+        real, pointer, intent (inout) :: dest(:,:,:)
+        real, target, dimension(0,0,0) :: empty
+
+        dest => empty
     end subroutine
 
 end module esmfBmiAdapter
