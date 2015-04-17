@@ -44,50 +44,54 @@ module TestModel_class
         output_items = (/'surface_elevation   '/)
           ! end exchange item list
 contains
+
     subroutine initialize (config_file)
-            character (len=*), intent (in) :: config_file
-            ! end declaration section
 
-            if (len (config_file)>0) then
-              open (15, file=config_file)
-              read (15, *) self%dt, self%t_end, self%n_x, self%n_y
-              close (15)
-            else
-              self%dt = 1.
-              self%t_end = 10000.
-              self%n_x = 10
-              self%n_y = 20
-            end if
+        implicit none
 
-            self%t = 0.
-            self%dx = 1.
-            self%dy = 1.
+        character (len=*), intent (in) :: config_file
+        ! end declaration section
 
-            allocate (self%z(self%n_x, self%n_y))
-            allocate (self%z_temp(self%n_x, self%n_y))
+        if (len (config_file)>0) then
+            open (15, file=config_file)
+            read (15, *) self%dt, self%t_end, self%n_x, self%n_y
+            close (15)
+        else
+            self%dt = 5.
+            self%t_end = 20.
+            self%n_x = 10
+            self%n_y = 20
+        end if
 
-            self%z = 0.
-            self%z_temp = 0.
+        self%t = 0.
+        self%dx = 1.
+        self%dy = 1.
 
-            call set_bc (self%z)
-            call set_bc (self%z_temp)
+        allocate (self%z(self%n_x, self%n_y))
+        allocate (self%z_temp(self%n_x, self%n_y))
 
-          end subroutine initialize
+        self%z = 0.
+        self%z_temp = 0.
 
-          subroutine set_bc (z)
-            real, dimension (:,:), intent (out) :: z
+        call setBC (self%z)
+        call setBC (self%z_temp)
 
-            integer :: i
-            real :: top_x
+    end subroutine
 
-            top_x = size(z, 1)-1
+    subroutine setBC (z)
+        implicit none
+        real, dimension (:,:), intent (out) :: z
 
-            do i = 0, size(z, 1)-1
-              z(i+1,1) = top_x**2*.25 - (i-top_x*.5)**2
-            end do
+        integer :: i
+        real :: top_x
 
-          end subroutine set_bc
+        top_x = size(z, 1)-1
 
+        do i = 0, size(z, 1)-1
+            z(i+1,1) = top_x**2*.25 - (i-top_x*.5)**2
+        end do
+
+    end subroutine
 
     subroutine finalize ()
         implicit none
@@ -97,61 +101,61 @@ contains
         deallocate (self%z_temp)
     end subroutine
 
-subroutine update ()
-            implicit none
-            ! end declaration section
+    subroutine update ()
+        implicit none
+        ! end declaration section
 
-            real, parameter :: rho = 0.
-            real :: dx2
-            real :: dy2
-            real :: dx2_dy2_rho
-            real :: coef
-            integer :: i, j
+        real, parameter :: rho = 0.
+        real :: dx2
+        real :: dy2
+        real :: dx2_dy2_rho
+        real :: coef
+        integer :: i, j
 
-            dx2 = self%dx**2
-            dy2 = self%dy**2
-            dx2_dy2_rho = dx2 * dy2 * rho
-            coef = self%dt / (2. * (dx2 + dy2))
+        dx2 = self%dx**2
+        dy2 = self%dy**2
+        dx2_dy2_rho = dx2 * dy2 * rho
+        coef = self%dt / (2. * (dx2 + dy2))
 
-            do j = 2, self%n_y-1
-              do i = 2, self%n_x-1
+        do j = 2, self%n_y-1
+            do i = 2, self%n_x-1
                 self%z_temp(i,j) = &
-                  coef * (dx2 * (self%z(i-1,j) + self%z(i+1,j)) + &
-                          dy2 * (self%z(i,j-1) + self%z(i,j+1)) - &
-                          dx2_dy2_rho)
-              end do
+                    coef * (dx2 * (self%z(i-1,j) + self%z(i+1,j)) + &
+                    dy2 * (self%z(i,j-1) + self%z(i,j+1)) - &
+                    dx2_dy2_rho)
             end do
+        end do
 
-            self%t = self%t + self%dt
+        self%t = self%t + self%dt
 
-            self%z = self%z_temp
-          end subroutine update
+        self%z = self%z_temp
+    end subroutine update
 
-          subroutine updateUntil (t)
-            implicit none
-            real, intent (in) :: t
-            ! end declaration section
+    subroutine updateUntil (t)
+        implicit none
+        real, intent (in) :: t
+        ! end declaration section
 
-            integer :: n
-            integer :: n_steps
-            real :: saved_dt
+        integer :: n
+        integer :: n_steps
+        real :: saved_dt
 
-            n_steps = (t-self%t)/self%dt
+        n_steps = (t-self%t)/self%dt
 
-            do n = 1, n_steps
-              call BMI_Update ()
-            end do
+        do n = 1, n_steps
+            call BMI_Update ()
+        end do
 
-            if (t>self%t) then
-              saved_dt = self%dt
-              self%dt = t - self%t
+        if (t>self%t) then
+            saved_dt = self%dt
+            self%dt = t - self%t
 
-              call BMI_Update ()
+            call BMI_Update ()
 
-              self%dt = saved_dt
-            endif
+            self%dt = saved_dt
+        endif
 
-          end subroutine updateUntil
+    end subroutine updateUntil
 
     subroutine getStartTime (start)
         implicit none
