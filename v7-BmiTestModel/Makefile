@@ -52,11 +52,16 @@ LOCAL_F90LINKLIBS = -lesmfbmi -ltest_bmi
 	$(ESMF_CXXCOMPILER) -c $(ESMF_CXXCOMPILEOPTS) $(ESMF_CXXCOMPILEPATHSLOCAL) $(ESMF_CXXCOMPILEPATHS) $(ESMF_CXXCOMPILECPPFLAGS) $<
 
 # -----------------------------------------------------------------------------
+<<<<<<< HEAD
 all: directories libtest_bmi.a testApp.exe
 # -----------------------------------------------------------------------------
 directories :
 	mkdir -p lib
 
+=======
+all: libtest_bmi.a testApp.exe
+# -----------------------------------------------------------------------------
+>>>>>>> a46016f488954e03c673f22e3fa605a42af15fbd
 testApp.exe: testApp.o testNuopcDriver.o testNuopcBmiCmp.o
 	$(ESMF_F90LINKER) $(ESMF_F90LINKOPTS) $(ESMF_F90LINKPATHS) $(ESMF_F90LINKRPATHS) $(LOCAL_F90LINKOPTS) $(LOCAL_F90LINKPATHS) -o $@ $^ $(ESMF_F90ESMFLINKLIBS) $(LOCAL_F90LINKLIBS)
 
