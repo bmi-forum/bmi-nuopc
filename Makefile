@@ -59,14 +59,9 @@ directories :
 	mkdir -p mod
 	mkdir -p lib
 
-all: libesmfbmi.a
-# -----------------------------------------------------------------------------
-
 libesmfbmi.a : NUOPC_Model_BMI.o esmfBmiAdapter.o
 	cp *.mod $(ESMF_BMIMODDIR)/.
 	ar rc $(ESMF_BMILIBDIR)/libesmfbmi.a $^
-
-# -----------------------------------------------------------------------------
 
 # module dependencies:
 NUOPC_Model_BMI.o: esmfBmiAdapter.o

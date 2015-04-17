@@ -57,8 +57,6 @@ all: directories libtest_bmi.a testApp.exe
 directories :
 	mkdir -p lib
 
-all: libtest_bmi.a testApp.exe
-# -----------------------------------------------------------------------------
 testApp.exe: testApp.o testNuopcDriver.o testNuopcBmiCmp.o
 	$(ESMF_F90LINKER) $(ESMF_F90LINKOPTS) $(ESMF_F90LINKPATHS) $(ESMF_F90LINKRPATHS) $(LOCAL_F90LINKOPTS) $(LOCAL_F90LINKPATHS) -o $@ $^ $(ESMF_F90ESMFLINKLIBS) $(LOCAL_F90LINKLIBS)
 

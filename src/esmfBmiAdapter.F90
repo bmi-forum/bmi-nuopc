@@ -687,12 +687,6 @@ contains
 
         call ESMF_GridGet(grid, localDECount=ldecount, rc=rc)
         if (rc .ne. ESMF_SUCCESS) call ESMF_Finalize(endflag=ESMF_END_ABORT)
-        print *,"Local DE Count: ",ldecount," for PET: ",lpe
-
-        call ESMF_GridGet(grid, staggerloc=ESMF_STAGGERLOC_CENTER, localDE = 0, &
-            exclusiveCount=gec, rc=rc)
-        if (rc .ne. ESMF_SUCCESS) call ESMF_Finalize(endflag=ESMF_END_ABORT)
-        print *,"Local Exclusive Count: ",gec," for PET: ",lpe
 
         call ESMF_GridGet(grid, staggerloc=ESMF_STAGGERLOC_CENTER, localDE = 0, &
             exclusiveCount=gec, rc=rc)

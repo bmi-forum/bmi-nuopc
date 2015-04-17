@@ -55,14 +55,10 @@ LOCAL_F90LINKLIBS = -lesmfbmi -lwrf_bmi
 	$(ESMF_CXXCOMPILER) -c $(ESMF_CXXCOMPILEOPTS) $(ESMF_CXXCOMPILEPATHSLOCAL) $(ESMF_CXXCOMPILEPATHS) $(ESMF_CXXCOMPILECPPFLAGS) $<
 
 # -----------------------------------------------------------------------------
-
 all: directories wrfApp.exe
 # -----------------------------------------------------------------------------
 directories :
 	mkdir -p lib
-
-all: wrfApp.exe
-# -----------------------------------------------------------------------------
 
 wrfApp.exe: wrfApp.o wrfNuopcDriver.o wrfNuopcBmiCmp.o module_ncTool.o
 	$(ESMF_F90LINKER) $(ESMF_F90LINKOPTS) $(ESMF_F90LINKPATHS) $(ESMF_F90LINKRPATHS) $(LOCAL_F90LINKOPTS) $(LOCAL_F90LINKPATHS) -o $@ $^ $(ESMF_F90ESMFLINKLIBS) $(LOCAL_F90LINKLIBS)
@@ -89,5 +85,3 @@ info:
 	@echo ==================================================================
 	@cat $(ESMFMKFILE)
 	@echo ==================================================================
-
-

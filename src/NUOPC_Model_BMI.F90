@@ -34,10 +34,7 @@ module NUOPC_Model_BMI
         label_SetRunClock
 
     character(:),allocatable        :: modelConfigFile
-    !character(:),allocatable        :: invarnames(:)
-    !character(:),allocatable        :: outvarnames(:)
 
-!-----------------------------------------------------------------------------
 contains
     !-----------------------------------------------------------------------------
 
